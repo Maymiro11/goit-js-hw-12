@@ -2,6 +2,8 @@ import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
 import iziToast from 'izitoast';
 import 'izitoast/dist/css/iziToast.min.css';
+import axios from "axios";
+
 import errorIcon from '../src/img/izitoast-icon.svg';
 import closeIcon from '../src/img/izitoast-close.svg';
 
@@ -17,7 +19,9 @@ let page = 1;
 
 form.addEventListener('submit', onFormSubmit);
 
-function fetchImg(query) {
+async function fetchImg(query) {
+if (query.trim() === '') return;
+
   const BASE_URL = 'https://pixabay.com/api/?';
   const PARAMS = new URLSearchParams({
     key: '42172991-e7a3268a8ccb87dfba8d5efbc',
@@ -30,9 +34,16 @@ function fetchImg(query) {
   });
   const url = BASE_URL + PARAMS;
 
-  return fetch(url).then(response => response.json());
+try {
+    const response = await axios.get(url);
+    return response.data;
+} catch (error) {
+    console.error('Error fetching data', error);
+    throw error;
 }
-function onFormSubmit(e) {
+}
+
+async function onFormSubmit(e) {
   e.preventDefault();
   page = 1;
   query = document.querySelector('input[type="text"]').value.trim();
@@ -41,8 +52,10 @@ function onFormSubmit(e) {
     loader.classList.remove('hidden');
     btnLoader.classList.remove('hidden');
 
-    fetchImg(query)
-      .then(data => {
+    try {
+        const data = await fetchImg(query);
+        console.log('Кількість зображень:', data.totalHits);
+    
         if (data.hits.length === 0) {
           iziToast.show({
             messageAlign: 'center',
@@ -75,11 +88,11 @@ function onFormSubmit(e) {
           lightbox.refresh();
           btnLoader.classList.remove('hidden');
         }
-      })
-      .catch(error => console.error('Error fetching data:', error))
-      .finally(() => {
+      } catch (error) {
+            console.error('Error fetching data:', error)
+      } finally {
         loader.classList.add('hidden');
-      });
+      }
   }
 }
 function imagesTemplate(hits) {
@@ -102,21 +115,69 @@ function imgTemplate(hit) {
 }
 btnLoader.addEventListener('click', onButtonClick);
 
-function onButtonClick() {
+async function onButtonClick() {
   page += 1;
-  fetchImg(query)
-    .then(data => {
-      if (data.hits.length === 0) {
-        gallery.innerHTML =
-          '<p>Sorry, there are no images matching your search query. Please try again!</p>';
+
+try {
+    const data = await fetchImg(query);
+
+    if (data.totalHits <= page * 15) {
+        btnLoader.classList.add('hidden');
+        iziToast.show({
+            messageAlign: 'center',
+            message: 'We\'re sorry, but you\'ve reached the end of search results.',
+            messageColor: '#FFFFFF',
+            messageSize: '16px',
+            position: 'center',
+            backgroundColor: '#EF4040',
+            progressBarColor: '#B51B1B',
+            iconUrl: errorIcon,
+            displayMode: 'replace',
+            close: false,
+            closeOnEscape: true,
+            pauseOnHover: false,
+            buttons: [
+              [
+                `<button type="button" style="background-color: transparent;"><img src=${closeIcon}></button>`,
+                function (instance, toast) {
+                  instance.hide({ transitionOut: 'fadeOut' }, toast);
+                },
+              ],
+            ],
+          });
+
       } else {
         gallery.insertAdjacentHTML('beforeend', imagesTemplate(data.hits));
 
         lightbox.refresh();
-      }
-    })
-    .catch(error => console.error('Error fetching data:', error))
-    .finally(() => {
+        }
+    } catch (error) {
+        console.error('Error fetching data:', error)
+    } finally  {
       loader.style.display = 'none';
-    });
+    }
+}
+//SCROLL
+
+  
+const observer = new IntersectionObserver((entries, observer) => {
+  entries.forEach((entry) => {
+    if (entry.isIntersecting) {
+      const cardHeight = entry.target.getBoundingClientRect().height;
+      const offset = cardHeight * 2;
+      const currentPosition = window.pageYOffset;
+      const targetPosition = currentPosition + offset;
+      window.scrollTo({
+        top: targetPosition,
+        behavior: 'smooth',
+      });
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+
+const lastGalleryCard = document.querySelector('.gallery-card:last-of-type');
+
+if (lastGalleryCard) {
+  observer.observe(lastGalleryCard);
 }
