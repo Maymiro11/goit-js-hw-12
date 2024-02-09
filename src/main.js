@@ -159,13 +159,12 @@ try {
 }
 //SCROLL
 
-  
 const observer = new IntersectionObserver((entries, observer) => {
   entries.forEach((entry) => {
     if (entry.isIntersecting) {
       const cardHeight = entry.target.getBoundingClientRect().height;
       const offset = cardHeight * 2;
-      const currentPosition = window.pageYOffset;
+      const currentPosition = window.scrollY;
       const targetPosition = currentPosition + offset;
       window.scrollTo({
         top: targetPosition,
