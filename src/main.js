@@ -15,7 +15,9 @@ const loader = document.querySelector('.loader');
 const btnLoader = document.querySelector('.btn-load');
 
 let query;
-let page = 1;
+let currentPage = 1;
+let totalPages = 0;
+const PAGE_SIZE = 15;
 
 form.addEventListener('submit', onFormSubmit);
 
@@ -29,7 +31,7 @@ if (query.trim() === '') return;
     image_type: 'photo',
     orientation: 'horizontal',
     safesearch: true,
-    page: page,
+    currentPage: currentPage,
     per_page: 15,
   });
   const url = BASE_URL + PARAMS;
@@ -45,7 +47,7 @@ try {
 
 async function onFormSubmit(e) {
   e.preventDefault();
-  page = 1;
+  currentPage = 1;
   query = document.querySelector('input[type="text"]').value.trim();
 
   if (query !== '') {
@@ -116,12 +118,12 @@ function imgTemplate(hit) {
 btnLoader.addEventListener('click', onButtonClick);
 
 async function onButtonClick() {
-  page += 1;
+  currentPage += 1;
 
 try {
     const data = await fetchImg(query);
 
-    if (data.totalHits <= page * 15) {
+    if (data.totalHits <= currentPage * 15) {
         btnLoader.classList.add('hidden');
         iziToast.show({
             messageAlign: 'center',
@@ -159,24 +161,59 @@ try {
 }
 //SCROLL
 
-const observer = new IntersectionObserver((entries, observer) => {
-  entries.forEach((entry) => {
+
+
+//кнопка лоадер
+
+async function loadMore() {
+  currentPage += 1;
+  showLoader();
+
+  try {
+    const data = await fetchImg(query);
+    gallery.insertAdjacentHTML('beforeend', imagesTemplate(data.hits));
+    updateStatusObserver();
+
+    if (currentPage >= totalPages) {
+      btnLoader.classList.add('hidden');
+    }
+  } catch (error) {
+    console.error('Error fetching data:', error);
+  } finally {
+    hideLoader();
+    window.scrollBy({
+      top: 578,
+      behavior: 'smooth',
+    });
+  }
+}
+
+function updateStatusObserver() {
+  const isLastPage = currentPage >= totalPages;
+  if (isLastPage) {
+    observer.unobserve(refs.targetElem);
+    console.log('The end!');
+  } else { 
+    observer.observe(refs.targetElem);
+  }
+}
+
+const callback = function (entries, observer) {
+  entries.forEach(entry => {
     if (entry.isIntersecting) {
-      const cardHeight = entry.target.getBoundingClientRect().height;
-      const offset = cardHeight * 2;
-      const currentPosition = window.scrollY;
-      const targetPosition = currentPosition + offset;
-      window.scrollTo({
-        top: targetPosition,
-        behavior: 'smooth',
-      });
-      observer.unobserve(entry.target);
+      loadMore();
     }
   });
-}, { threshold: 0.5 });
+};
 
-const lastGalleryCard = document.querySelector('.gallery-card:last-of-type');
+let observer = new IntersectionObserver(callback);
 
-if (lastGalleryCard) {
-  observer.observe(lastGalleryCard);
+// =====================================
+
+function showLoader() {
+  refs.loaderElem.classList.remove('hidden');
+}
+
+function hideLoader() {
+  refs.loaderElem.classList.add('hidden');
 }
