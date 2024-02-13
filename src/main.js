@@ -1,5 +1,6 @@
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
+
 import iziToast from 'izitoast';
 import 'izitoast/dist/css/iziToast.min.css';
 import axios from "axios";
@@ -7,97 +8,101 @@ import axios from "axios";
 import errorIcon from '../src/img/izitoast-icon.svg';
 import closeIcon from '../src/img/izitoast-close.svg';
 
-const lightbox = new SimpleLightbox('.gallery a', { scrollZoom: false });
+const lightbox = new SimpleLightbox('.gallery a');
 
-const form = document.querySelector('.form');
-const gallery = document.querySelector('.gallery');
-const loader = document.querySelector('.loader');
-const btnLoader = document.querySelector('.btn-load');
+const refs = {
+form: document.querySelector('.form'),
+gallery: document.querySelector('.gallery'),
+loader: document.querySelector('.loader'),
+btnLoader: document.querySelector('.btn-load'),
+}
 
-let query;
-let currentPage = 1;
+
+let query = null;
+let currentPage = 0;
 let totalPages = 0;
-const PAGE_SIZE = 15;
+const per_page = 15;
 
-form.addEventListener('submit', onFormSubmit);
+refs.form.addEventListener('submit', onFormSubmit);
+refs.btnLoader.addEventListener('click', onBtnLoadMore);
+
+async function onBtnLoadMore(e) {
+  e.preventDefault();
+  currentPage += 1;
+  console.log('Поточна сторінка:', currentPage);
+
+  refs.loader.classList.remove('hidden');
+
+  try{
+    const data = await fetchImg(query);
+    if (data.totalPages === 0) {
+      refs.loader.classList.add('hidden');
+      refs.btnLoader.classList.add('hidden');
+      return showError(message);
+    }
+  const markup = galleryTemplate(data.hits);
+  refs.gallery.insertAdjacentHTML('beforeend', markup);
+  lightbox.refresh();
+  checkBtnStatus(data);
+
+  const card = refs.gallery.lastElementChild;
+  const cardSize = card.getBoundingClientRect();
+  const topImagePosition = cardSize.top;
+  smoothScroll(topImagePosition);
+
+  } catch (error) {
+    showError(error);
+  }
+  refs.loader.classList.add('hidden');
+  
+}
+
+async function onFormSubmit(e) {
+  e.preventDefault();
+  query = document.querySelector('input[type="text"]').value.trim();
+  currentPage = 1;
+
+  refs.loader.classList.remove('hidden');
+  refs.gallery.innerHTML = '';
+  try {
+    const data = await fetchImg(query);
+    console.log('Кількість зображень:', data.totalHits);
+    if (data.totalHits === 0) {
+      refs.loader.classList.add('hidden');
+      refs.btnLoader.classList.add('hidden');
+      return showError(
+        'Sorry, there are no images matching <br/> your search query. Please try again!'
+      );
+    }
+    const markup = galleryTemplate(data.hits);
+    refs.gallery.innerHTML = markup;
+    lightbox.refresh();
+    checkBtnStatus(data);
+  } catch (error) {
+    console.error('Error fetching data', error);
+    throw error;
+  }
+  refs.loader.classList.add('hidden');
+  lightbox.refresh();
+}
 
 async function fetchImg(query) {
-if (query.trim() === '') return;
-
-  const BASE_URL = 'https://pixabay.com/api/?';
-  const PARAMS = new URLSearchParams({
+const url = 'https://pixabay.com/api/?';
+const response = await axios.get(url, {
+  params: {
     key: '42172991-e7a3268a8ccb87dfba8d5efbc',
     q: query,
     image_type: 'photo',
     orientation: 'horizontal',
     safesearch: true,
     currentPage: currentPage,
-    per_page: 15,
-  });
-  const url = BASE_URL + PARAMS;
-
-try {
-    const response = await axios.get(url);
-    return response.data;
-} catch (error) {
-    console.error('Error fetching data', error);
-    throw error;
-}
+    per_page: per_page,
+  },
+});
+return response.data;
 }
 
-async function onFormSubmit(e) {
-  e.preventDefault();
-  currentPage = 1;
-  query = document.querySelector('input[type="text"]').value.trim();
-
-  if (query !== '') {
-    loader.classList.remove('hidden');
-    btnLoader.classList.remove('hidden');
-
-    try {
-        const data = await fetchImg(query);
-        console.log('Кількість зображень:', data.totalHits);
-    
-        if (data.hits.length === 0) {
-          iziToast.show({
-            messageAlign: 'center',
-            message:
-              'Sorry, there are no images matching <br> your search query. Please try again!',
-            messageColor: '#FFFFFF',
-            messageSize: '16px',
-            position: 'center',
-            backgroundColor: '#EF4040',
-            progressBarColor: '#B51B1B',
-            iconUrl: errorIcon,
-            displayMode: 'replace',
-            close: false,
-            closeOnEscape: true,
-            pauseOnHover: false,
-            buttons: [
-              [
-                `<button type="button" style="background-color: transparent;"><img src=${closeIcon}></button>`,
-                function (instance, toast) {
-                  instance.hide({ transitionOut: 'fadeOut' }, toast);
-                },
-              ],
-            ],
-          });
-
-          form.reset();
-        } else {
-          gallery.innerHTML = imagesTemplate(data.hits);
-
-          lightbox.refresh();
-          btnLoader.classList.remove('hidden');
-        }
-      } catch (error) {
-            console.error('Error fetching data:', error)
-      } finally {
-        loader.classList.add('hidden');
-      }
-  }
-}
-function imagesTemplate(hits) {
+function galleryTemplate(hits) {
   return hits.map(imgTemplate).join('');
 }
 
@@ -115,105 +120,51 @@ function imgTemplate(hit) {
 </div>
 </li>`;
 }
-btnLoader.addEventListener('click', onButtonClick);
 
-async function onButtonClick() {
-  currentPage += 1;
-
-try {
-    const data = await fetchImg(query);
-
-    if (data.totalHits <= currentPage * 15) {
-        btnLoader.classList.add('hidden');
-        iziToast.show({
-            messageAlign: 'center',
-            message: 'We\'re sorry, but you\'ve reached the end of search results.',
-            messageColor: '#FFFFFF',
-            messageSize: '16px',
-            position: 'center',
-            backgroundColor: '#EF4040',
-            progressBarColor: '#B51B1B',
-            iconUrl: errorIcon,
-            displayMode: 'replace',
-            close: false,
-            closeOnEscape: true,
-            pauseOnHover: false,
-            buttons: [
-              [
-                `<button type="button" style="background-color: transparent;"><img src=${closeIcon}></button>`,
-                function (instance, toast) {
-                  instance.hide({ transitionOut: 'fadeOut' }, toast);
-                },
-              ],
-            ],
-          });
-
-      } else {
-        gallery.insertAdjacentHTML('beforeend', imagesTemplate(data.hits));
-
-        lightbox.refresh();
-        }
-    } catch (error) {
-        console.error('Error fetching data:', error)
-    } finally  {
-      loader.style.display = 'none';
-    }
-}
-//SCROLL
-
-
-
-//кнопка лоадер
-
-async function loadMore() {
-  currentPage += 1;
-  showLoader();
-
-  try {
-    const data = await fetchImg(query);
-    gallery.insertAdjacentHTML('beforeend', imagesTemplate(data.hits));
-    updateStatusObserver();
-
-    if (currentPage >= totalPages) {
-      btnLoader.classList.add('hidden');
-    }
-  } catch (error) {
-    console.error('Error fetching data:', error);
-  } finally {
-    hideLoader();
-    window.scrollBy({
-      top: 578,
-      behavior: 'smooth',
-    });
-  }
-}
-
-function updateStatusObserver() {
-  const isLastPage = currentPage >= totalPages;
-  if (isLastPage) {
-    observer.unobserve(refs.targetElem);
-    console.log('The end!');
-  } else { 
-    observer.observe(refs.targetElem);
-  }
-}
-
-const callback = function (entries, observer) {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      loadMore();
-    }
+function showError(message) {
+  iziToast.error({
+    message,
+    messageAlign: 'center',
+    position: 'center',
+    messageColor: '#ffffff',
+    messageSize: '16px',
+    backgroundColor: '#ef4040',
+    progressBarColor: '#B51B1B',
+    iconColor: '#ffffff',
+    iconUrl: errorIcon,
+    timeout: 5000,
+    displayMode: 'replace',
+    close: false,
+    closeOnEscape: true,
+    buttons: [
+      [
+        `<button type="button" style="background-color: transparent;"><img src=${closeIcon}></button>`,
+        function (instance, toast) {
+          instance.hide({ transitionOut: 'fadeOut' }, toast);
+        },
+      ],
+    ],
   });
-};
-
-let observer = new IntersectionObserver(callback);
-
-// =====================================
-
-function showLoader() {
-  refs.loaderElem.classList.remove('hidden');
 }
 
-function hideLoader() {
-  refs.loaderElem.classList.add('hidden');
+function checkBtnStatus(data) {
+  totalPages = Math.ceil(data.totalHits / per_page);
+  const isLastPage = totalPages === currentPage;
+  if (isLastPage) {
+    refs.btnLoader.classList.add('hidden');
+    showError("We're sorry, but you've reached the end of search results.");
+  } else {
+    refs.btnLoader.classList.remove('hidden');
+  }
 }
+
+function smoothScroll(topPosition) {
+  window.scrollBy({
+    top: topPosition,
+    left: 0,
+    behavior: 'smooth'
+  });
+}
+
+console.log('Hello');
+console.log('Hello');
