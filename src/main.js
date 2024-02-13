@@ -19,7 +19,7 @@ btnLoader: document.querySelector('.btn-load'),
 
 
 let query = null;
-let currentPage = 0;
+let currentPage = null;
 let totalPages = 0;
 const per_page = 15;
 
