@@ -166,5 +166,4 @@ function smoothScroll(topPosition) {
   });
 }
 
-console.log('Hello');
-console.log('Hello');
+
